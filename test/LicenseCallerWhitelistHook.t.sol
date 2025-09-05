@@ -17,11 +17,11 @@ import { MockERC20 } from "@storyprotocol/test/mocks/token/MockERC20.sol";
 import { AccessController } from "@storyprotocol/core/access/AccessController.sol";
 
 import { SimpleNFT } from "../src/mocks/SimpleNFT.sol";
-import { WhitelistHook } from "../src/WhitelistHook.sol";
+import { LicenseCallerWhitelistHook } from "../src/LicenseCallerWhitelistHook.sol";
 
 // Run this test:
-// forge test --fork-url https://aeneid.storyrpc.io/ --match-path test/WhitelistHook.t.sol
-contract WhitelistHookTest is Test {
+// forge test --fork-url https://aeneid.storyrpc.io/ --match-path test/LicenseCallerWhitelistHook.t.sol
+contract LicenseCallerWhitelistHookTest is Test {
     address internal alice = address(0xa11ce);
     address internal bob = address(0xb0b);
     address internal charlie = address(0xc4a11e);
@@ -47,7 +47,7 @@ contract WhitelistHookTest is Test {
     // Revenue Token - MERC20
     MockERC20 internal MERC20 = MockERC20(0xF2104833d386a2734a4eB3B8ad6FC6812F29E38E);
 
-    WhitelistHook public WHITELIST_HOOK;
+    LicenseCallerWhitelistHook public LICENSE_CALLER_WHITELIST_HOOK;
     SimpleNFT public SIMPLE_NFT;
     uint256 public tokenId;
     address public ipId;
@@ -59,12 +59,12 @@ contract WhitelistHookTest is Test {
         // deployed on the fork
         vm.etch(address(0x0101), address(new MockIPGraph()).code);
 
-        WHITELIST_HOOK = new WhitelistHook(ACCESS_CONTROLLER, address(IP_ASSET_REGISTRY));
+        LICENSE_CALLER_WHITELIST_HOOK = new LicenseCallerWhitelistHook(ACCESS_CONTROLLER, address(IP_ASSET_REGISTRY));
 
         // Make the registry *think* the hook is registered everywhere in this test
         vm.mockCall(
             address(MODULE_REGISTRY),
-            abi.encodeWithSelector(ModuleRegistry.isRegistered.selector, address(WHITELIST_HOOK)),
+            abi.encodeWithSelector(ModuleRegistry.isRegistered.selector, address(LICENSE_CALLER_WHITELIST_HOOK)),
             abi.encode(true)
         );
 
@@ -84,7 +84,7 @@ contract WhitelistHookTest is Test {
         Licensing.LicensingConfig memory licensingConfig = Licensing.LicensingConfig({
             isSet: true,
             mintingFee: 100,
-            licensingHook: address(WHITELIST_HOOK),
+            licensingHook: address(LICENSE_CALLER_WHITELIST_HOOK),
             hookData: "",
             commercialRevShare: 0,
             disabled: false,
@@ -100,65 +100,75 @@ contract WhitelistHookTest is Test {
 
     function test_addToWhitelistSuccess() public {
         vm.prank(alice);
-        WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
+        LICENSE_CALLER_WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
 
-        assertTrue(WHITELIST_HOOK.isWhitelisted(ipId, address(PIL_TEMPLATE), licenseTermsId, bob));
+        assertTrue(LICENSE_CALLER_WHITELIST_HOOK.isWhitelisted(ipId, address(PIL_TEMPLATE), licenseTermsId, bob));
     }
 
     function test_addToWhitelistRevertWhenAlreadyWhitelisted() public {
         vm.prank(alice);
-        WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
+        LICENSE_CALLER_WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
 
-        vm.expectRevert(abi.encodeWithSelector(WhitelistHook.WhitelistHook_AddressAlreadyWhitelisted.selector, bob));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LicenseCallerWhitelistHook.LicenseCallerWhitelistHook_AddressAlreadyWhitelisted.selector,
+                bob
+            )
+        );
         vm.prank(alice);
-        WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
+        LICENSE_CALLER_WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
     }
 
     function test_addToWhitelistRevertWhenNoPermission() public {
         vm.expectRevert(); // AccessControlled will revert
         vm.prank(bob); // bob doesn't have permission for alice's IP
-        WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, charlie);
+        LICENSE_CALLER_WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, charlie);
     }
 
     function test_removeFromWhitelistSuccess() public {
         // First add to whitelist
         vm.prank(alice);
-        WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
+        LICENSE_CALLER_WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
 
         // Then remove
         vm.prank(alice);
-        WHITELIST_HOOK.removeFromWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
+        LICENSE_CALLER_WHITELIST_HOOK.removeFromWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
 
-        assertFalse(WHITELIST_HOOK.isWhitelisted(ipId, address(PIL_TEMPLATE), licenseTermsId, bob));
+        assertFalse(LICENSE_CALLER_WHITELIST_HOOK.isWhitelisted(ipId, address(PIL_TEMPLATE), licenseTermsId, bob));
     }
 
     function test_removeFromWhitelistRevertWhenNotInWhitelist() public {
-        vm.expectRevert(abi.encodeWithSelector(WhitelistHook.WhitelistHook_AddressNotInWhitelist.selector, bob));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LicenseCallerWhitelistHook.LicenseCallerWhitelistHook_AddressNotInWhitelist.selector,
+                bob
+            )
+        );
         vm.prank(alice);
-        WHITELIST_HOOK.removeFromWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
+        LICENSE_CALLER_WHITELIST_HOOK.removeFromWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
     }
 
     function test_removeFromWhitelistRevertWhenNoPermission() public {
         // First add to whitelist
         vm.prank(alice);
-        WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
+        LICENSE_CALLER_WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
 
         vm.expectRevert(); // AccessControlled will revert
         vm.prank(bob); // bob doesn't have permission for alice's IP
-        WHITELIST_HOOK.removeFromWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
+        LICENSE_CALLER_WHITELIST_HOOK.removeFromWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
     }
 
     function test_isWhitelistedReturnsFalseByDefault() public {
-        assertFalse(WHITELIST_HOOK.isWhitelisted(ipId, address(PIL_TEMPLATE), licenseTermsId, bob));
+        assertFalse(LICENSE_CALLER_WHITELIST_HOOK.isWhitelisted(ipId, address(PIL_TEMPLATE), licenseTermsId, bob));
     }
 
     function test_beforeMintLicenseTokensSuccess() public {
         // Add bob to whitelist
         vm.prank(alice);
-        WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
+        LICENSE_CALLER_WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
 
         // Bob should be able to mint
-        uint256 fee = WHITELIST_HOOK.beforeMintLicenseTokens(
+        uint256 fee = LICENSE_CALLER_WHITELIST_HOOK.beforeMintLicenseTokens(
             bob,
             ipId,
             address(PIL_TEMPLATE),
@@ -172,17 +182,30 @@ contract WhitelistHookTest is Test {
     }
 
     function test_beforeMintLicenseTokensRevertWhenNotWhitelisted() public {
-        vm.expectRevert(abi.encodeWithSelector(WhitelistHook.WhitelistHook_AddressNotWhitelisted.selector, bob));
-        WHITELIST_HOOK.beforeMintLicenseTokens(bob, ipId, address(PIL_TEMPLATE), licenseTermsId, 1, bob, "");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LicenseCallerWhitelistHook.LicenseCallerWhitelistHook_AddressNotWhitelisted.selector,
+                bob
+            )
+        );
+        LICENSE_CALLER_WHITELIST_HOOK.beforeMintLicenseTokens(
+            bob,
+            ipId,
+            address(PIL_TEMPLATE),
+            licenseTermsId,
+            1,
+            bob,
+            ""
+        );
     }
 
     function test_beforeMintLicenseTokensMultipleTokens() public {
         // Add bob to whitelist
         vm.prank(alice);
-        WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
+        LICENSE_CALLER_WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
 
         // Bob should be able to mint multiple tokens
-        uint256 fee = WHITELIST_HOOK.beforeMintLicenseTokens(
+        uint256 fee = LICENSE_CALLER_WHITELIST_HOOK.beforeMintLicenseTokens(
             bob,
             ipId,
             address(PIL_TEMPLATE),
@@ -208,7 +231,7 @@ contract WhitelistHookTest is Test {
         Licensing.LicensingConfig memory licensingConfig = Licensing.LicensingConfig({
             isSet: true,
             mintingFee: 200,
-            licensingHook: address(WHITELIST_HOOK),
+            licensingHook: address(LICENSE_CALLER_WHITELIST_HOOK),
             hookData: "",
             commercialRevShare: 0,
             disabled: false,
@@ -220,11 +243,11 @@ contract WhitelistHookTest is Test {
         LICENSING_MODULE.attachLicenseTerms(ipId, address(PIL_TEMPLATE), licenseTermsId2);
         LICENSING_MODULE.setLicensingConfig(ipId, address(PIL_TEMPLATE), licenseTermsId2, licensingConfig);
         // Add bob to whitelist for first license
-        WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
+        LICENSE_CALLER_WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
         vm.stopPrank();
 
         // Bob should be whitelisted for first license but not second
-        assertTrue(WHITELIST_HOOK.isWhitelisted(ipId, address(PIL_TEMPLATE), licenseTermsId, bob));
-        assertFalse(WHITELIST_HOOK.isWhitelisted(ipId, address(PIL_TEMPLATE), licenseTermsId2, bob));
+        assertTrue(LICENSE_CALLER_WHITELIST_HOOK.isWhitelisted(ipId, address(PIL_TEMPLATE), licenseTermsId, bob));
+        assertFalse(LICENSE_CALLER_WHITELIST_HOOK.isWhitelisted(ipId, address(PIL_TEMPLATE), licenseTermsId2, bob));
     }
 }

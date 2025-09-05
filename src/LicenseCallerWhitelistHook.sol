@@ -7,13 +7,15 @@ import { AccessControlled } from "@storyprotocol/core/access/AccessControlled.so
 import { ILicensingHook } from "@storyprotocol/core/interfaces/modules/licensing/ILicensingHook.sol";
 import { ILicenseTemplate } from "@storyprotocol/core/interfaces/modules/licensing/ILicenseTemplate.sol";
 
-/// @title Whitelist Hook
+/// @title License Caller Whitelist Hook
 /// @notice This hook enforces whitelist restrictions for license token minting.
-///         Only addresses that have been whitelisted by the IP owner can mint license tokens
+///         Only addresses that have been whitelisted by the IP owner can call the mint function
 ///         for a specific license attached to an IP. To use this hook, set the `licensingHook` field
 ///         in the licensing config to the address of this hook.
-contract WhitelistHook is BaseModule, AccessControlled, ILicensingHook {
-    string public constant override name = "WHITELIST_HOOK";
+/// @dev This hook whitelists the caller, not the receiver of the license tokens.
+///      A whitelisted address can mint tokens for any receiver address.
+contract LicenseCallerWhitelistHook is BaseModule, AccessControlled, ILicensingHook {
+    string public constant override name = "LICENSE_CALLER_WHITELIST_HOOK";
 
     /// @notice Stores the whitelist status for addresses for a given license.
     /// @dev The key is keccak256(licensorIpId, licenseTemplate, licenseTermsId, minterAddress).
@@ -44,9 +46,9 @@ contract WhitelistHook is BaseModule, AccessControlled, ILicensingHook {
         address minter
     );
 
-    error WhitelistHook_AddressNotWhitelisted(address minter);
-    error WhitelistHook_AddressAlreadyWhitelisted(address minter);
-    error WhitelistHook_AddressNotInWhitelist(address minter);
+    error LicenseCallerWhitelistHook_AddressNotWhitelisted(address minter);
+    error LicenseCallerWhitelistHook_AddressAlreadyWhitelisted(address minter);
+    error LicenseCallerWhitelistHook_AddressNotInWhitelist(address minter);
 
     constructor(
         address accessController,
@@ -65,7 +67,7 @@ contract WhitelistHook is BaseModule, AccessControlled, ILicensingHook {
         address minter
     ) external verifyPermission(licensorIpId) {
         bytes32 key = keccak256(abi.encodePacked(licensorIpId, licenseTemplate, licenseTermsId, minter));
-        if (whitelist[key]) revert WhitelistHook_AddressAlreadyWhitelisted(minter);
+        if (whitelist[key]) revert LicenseCallerWhitelistHook_AddressAlreadyWhitelisted(minter);
         whitelist[key] = true;
         emit AddressWhitelisted(licensorIpId, licenseTemplate, licenseTermsId, minter);
     }
@@ -82,7 +84,7 @@ contract WhitelistHook is BaseModule, AccessControlled, ILicensingHook {
         address minter
     ) external verifyPermission(licensorIpId) {
         bytes32 key = keccak256(abi.encodePacked(licensorIpId, licenseTemplate, licenseTermsId, minter));
-        if (!whitelist[key]) revert WhitelistHook_AddressNotInWhitelist(minter);
+        if (!whitelist[key]) revert LicenseCallerWhitelistHook_AddressNotInWhitelist(minter);
         whitelist[key] = false;
         emit AddressRemovedFromWhitelist(licensorIpId, licenseTemplate, licenseTermsId, minter);
     }
@@ -124,7 +126,7 @@ contract WhitelistHook is BaseModule, AccessControlled, ILicensingHook {
         address receiver,
         bytes calldata hookData
     ) external returns (uint256 totalMintingFee) {
-        _checkWhitelist(licensorIpId, licenseTemplate, licenseTermsId, receiver);
+        _checkWhitelist(licensorIpId, licenseTemplate, licenseTermsId, caller);
         return _calculateFee(licenseTemplate, licenseTermsId, amount);
     }
 
@@ -192,7 +194,7 @@ contract WhitelistHook is BaseModule, AccessControlled, ILicensingHook {
     ) internal view {
         bytes32 key = keccak256(abi.encodePacked(licensorIpId, licenseTemplate, licenseTermsId, minter));
         if (!whitelist[key]) {
-            revert WhitelistHook_AddressNotWhitelisted(minter);
+            revert LicenseCallerWhitelistHook_AddressNotWhitelisted(minter);
         }
     }
 
