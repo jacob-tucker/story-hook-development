@@ -250,4 +250,46 @@ contract LicenseCallerWhitelistHookTest is Test {
         assertTrue(LICENSE_CALLER_WHITELIST_HOOK.isWhitelisted(ipId, address(PIL_TEMPLATE), licenseTermsId, bob));
         assertFalse(LICENSE_CALLER_WHITELIST_HOOK.isWhitelisted(ipId, address(PIL_TEMPLATE), licenseTermsId2, bob));
     }
+
+    function test_beforeMintLicenseTokensToDifferentReceiver() public {
+        // Add bob to whitelist
+        vm.prank(alice);
+        LICENSE_CALLER_WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
+
+        // Bob should be able to mint
+        uint256 fee = LICENSE_CALLER_WHITELIST_HOOK.beforeMintLicenseTokens(
+            bob,
+            ipId,
+            address(PIL_TEMPLATE),
+            licenseTermsId,
+            1,
+            alice,
+            ""
+        );
+
+        assertEq(fee, 100); // minting fee from license terms
+    }
+
+    function test_beforeMintLicenseTokensRevertWhenCallerNotWhitelisted() public {
+        // Add bob to whitelist
+        vm.prank(alice);
+        LICENSE_CALLER_WHITELIST_HOOK.addToWhitelist(ipId, address(PIL_TEMPLATE), licenseTermsId, bob);
+
+        // Bob should be able to mint
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LicenseCallerWhitelistHook.LicenseCallerWhitelistHook_AddressNotWhitelisted.selector,
+                alice
+            )
+        );
+        LICENSE_CALLER_WHITELIST_HOOK.beforeMintLicenseTokens(
+            alice,
+            ipId,
+            address(PIL_TEMPLATE),
+            licenseTermsId,
+            1,
+            bob,
+            ""
+        );
+    }
 }
